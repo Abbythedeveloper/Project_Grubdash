@@ -1,207 +1,230 @@
 const path = require("path");
 
-// Use the existing order data
+// Using the existing order data
 const orders = require(path.resolve("src/data/orders-data"));
 
-// Use this function to assigh ID's when necessary
+// Using this function to assigh ID's when necessary
 const nextId = require("../utils/nextId");
 
-// TODO: Implement the /orders handlers needed to make the tests pass
+// Validation Functions for POST and PUT requests:
+function bodyHasDeliverToProperty(req, res, next) {
+  const { data = {} } = req.body;
 
-// Middleware / Validation: if requirements not met will return error message
-function deliverToExists(req, res, next) {
-  const { data: { deliverTo } = {} } = req.body;
-
-  if (deliverTo) {
-    return next();
-  }
-  next({
-    status: 400,
-    message: "Order must include a deliverTo",
-  });
-}
-
-function mobileNumberExists(req, res, next) {
-  const { data: { mobileNumber } = {} } = req.body;
-
-  if (mobileNumber) {
-    return next();
-  }
-  next({
-    status: 400,
-    message: "Order must include a mobileNumber",
-  });
-}
-
-function dishesExists(req, res, next) {
-  const { data: { dishes } = {} } = req.body;
-
-  if (!dishes) {
+  if (!data.deliverTo) {
     next({
       status: 400,
-      message: "Order must include a dish",
-    });
-  } else if (!Array.isArray(dishes) || dishes.length === 0) {
-    next({
-      status: 400,
-      message: "Order must include at least one dish",
+      message: "Order must include a deliverTo property.",
     });
   }
+  // Passing the reqest body data to the next middleware/handler functions using "response.locals"
+  res.locals.reqBody = data;
   return next();
 }
 
-// const array1 = [5, 12, 8, 130, 44];
-// const isLargeNumber = (element) => element > 13;
-// console.log(array1.findIndex(isLargeNumber));
-// // expected output: 3
-// The findIndex() method returns the index of the first element in an array that satisfies the provided testing function
+function bodyHasMobileNumProperty(req, res, next) {
+  const reqBody = res.locals.reqBody;
 
-function dishQuantityExists(req, res, next) {
-  const { data: { dishes } = {} } = req.body;
-  const index = dishes.findIndex((dish) => !dish.quantity);
-  if (index >= 0) {
+  if (!reqBody.mobileNumber) {
     next({
       status: 400,
-      message: `Dish ${index} must have a quantity that is an integer greater than 0`,
-    });
-  }
-  return next();
-}
-
-function dishQuantityIsInteger(req, res, next) {
-  const { data: { dishes } = {} } = req.body;
-  const index = dishes.findIndex((dish) => !Number.isInteger(dish.quantity));
-
-  if (index >= 0) {
-    next({
-      status: 400,
-      message: `Dish ${index} must have a quantity that is an integer greater than 0`,
+      message: "Order must include a mobileNumber property.",
     });
   }
 
   return next();
 }
 
-function statusExists(req, res, next) {
-  const { data: { status } = {} } = req.body;
+function bodyHasDishesProperty(req, res, next) {
+  const reqBody = res.locals.reqBody;
 
   if (
-    status === "pending" ||
-    status === "preparing" ||
-    status === "out-for-delivery"
+    !reqBody.dishes ||
+    !reqBody.dishes.length ||
+    !Array.isArray(reqBody.dishes)
   ) {
+    next({
+      status: 400,
+      message: "Order must include at least one dish.",
+    });
+  }
+
+  return next();
+}
+
+function bodyHasDishQuantityProperty(req, res, next) {
+  const dishes = res.locals.reqBody.dishes;
+
+  const indexesOfDishesWithoutQuantityProperty = dishes.reduce(
+    (acc, dish, index) => {
+      if (
+        !dish.quantity ||
+        !dish.quantity > 0 ||
+        typeof dish.quantity !== "number"
+      ) {
+        acc.push(index);
+        return acc;
+      }
+      return acc;
+    },
+    []
+  );
+
+  if (!indexesOfDishesWithoutQuantityProperty.length) {
+    // All dishes have the right quantity property
     return next();
+  }
+
+  // If there are dishes without the right quantity property, the following code will run:
+  if (indexesOfDishesWithoutQuantityProperty.length > 1) {
+    const stringOfDishIndex = indexesOfDishesWithoutQuantityProperty.join(", ");
+
+    next({
+      status: 400,
+      message: `Dishes ${stringOfDishIndex} must have a quantity that is an integer greater than 0.`,
+    });
   }
 
   next({
     status: 400,
-    message:
-      "Order must have a status of pending, preparing, out-for-delivery, delivered",
+    message: `Dish ${indexesOfDishesWithoutQuantityProperty} must have a quantity that is an integer greater than 0.`,
   });
 }
 
-function statusPending(req, res, next) {
-  const { order } = res.locals;
-
-  if (order.status === "pending") {
-    return next();
-  }
-
-  next({
-    status: 400,
-    message: "An order cannot be deleted unless it is pending",
-  });
-}
-
-/////////////////////// CRUDL ///////////////////////////////////////////////////
-
-function list(req, res) {
-  res.json({ data: orders });
-}
-
-function create(req, res) {
-  const { data: { deliverTo, mobileNumber, dishes } = {} } = req.body;
-  const newId = nextId();
-  const newOrder = {
-    id: newId,
-    deliverTo,
-    mobileNumber,
-    dishes,
-  };
-  orders.push(newOrder);
-  res.status(201).json({ data: newOrder });
-}
-///////////// list a order ///////////////////////////////////////
-//orderExists validation is needed when you want to read,update or delete a specific id
-
+// Validation Function for Read, Update, and Delete functions:
 function orderExists(req, res, next) {
   const { orderId } = req.params;
   const foundOrder = orders.find((order) => order.id === orderId);
 
   if (foundOrder) {
     res.locals.order = foundOrder;
+    // Passing the req route parameter, :orderId, to the next middleware/handler functions using "response.locals"
+    res.locals.orderId = orderId;
     return next();
   }
 
   next({
     status: 404,
-    message: `Order does not exist: ${orderId}`,
+    message: `No matching order is found for orderId ${orderId}.`,
   });
+}
+
+// Validation Functions for PUT request/Update function:
+function bodyIdMatchesRouteId(req, res, next) {
+  const orderId = res.locals.orderId;
+  const reqBody = res.locals.reqBody;
+
+  // The id property is not required in the body of the request, but if it is present it must match :orderId from the route
+  if (reqBody.id) {
+    if (reqBody.id === orderId) {
+      return next();
+    }
+    next({
+      status: 400,
+      message: `Order id does not match route id. Order: ${reqBody.id}, Route: ${orderId}`,
+    });
+  }
+
+  return next();
+}
+
+function bodyHasStatusProperty(req, res, next) {
+  const reqBody = res.locals.reqBody;
+
+  if (!reqBody.status || reqBody.status === "invalid") {
+    next({
+      status: 400,
+      message:
+        "Order must have a status of pending, preparing, out-for-delivery, or delivered.",
+    });
+  }
+
+  if (reqBody.status === "delivered") {
+    next({
+      status: 400,
+      message: "A delivered order cannot be changed.",
+    });
+  }
+
+  return next();
+}
+
+// Validation Function for Delete request:
+function orderStatusIsPending(req, res, next) {
+  const order = res.locals.order;
+
+  if (order.status !== "pending") {
+    next({
+      status: 400,
+      message: "An order cannot be deleted unless it is pending.",
+    });
+  }
+
+  return next();
+}
+
+// Route Handlers:
+function destroy(req, res) {
+  const orderId = res.locals.orderId;
+  const orderIndex = orders.findIndex((order) => order.id === orderId);
+  orders.splice(orderIndex, 1);
+  res.sendStatus(204);
+}
+
+function update(req, res) {
+  const reqBody = res.locals.reqBody;
+  const order = res.locals.order;
+
+  // Creating array of property names
+  const existingOrderProperties = Object.getOwnPropertyNames(order);
+
+  for (let i = 0; i < existingOrderProperties.length; i++) {
+    // Accessing each order object key within the array
+    let propName = existingOrderProperties[i];
+    // Updating each value if there is a difference between the existing order and the req body order
+    if (propName !== "id" && order[propName] !== reqBody[propName]) {
+      order[propName] = reqBody[propName];
+    }
+  }
+  res.json({ data: order });
 }
 
 function read(req, res) {
-  const order = res.locals.order;
-  res.json({ data: order });
-}
-////////////////////////update /////////////////////////////////
-
-function update(req, res, next) {
-  const { orderId } = req.params;
-  const { data: { id, deliverTo, mobileNumber, dishes, status } = {} } =
-    req.body;
-  if (!id || orderId === id) {
-    const updatedOrder = {
-      id: orderId,
-      deliverTo,
-      mobileNumber,
-      dishes,
-      status,
-    };
-    res.json({ data: updatedOrder });
-  }
-
-  next({
-    status: 400,
-    message: `Order id does not match route id. Order: ${id}, Route: ${orderId}.`,
-  });
+  res.json({ data: res.locals.order });
 }
 
-function destroy(req, res, next) {
-  const { orderId } = req.params;
-  const index = orders.findIndex((order) => order.id === orderId);
-  const removed = orders.splice(index, 1);
-  res.sendStatus(204);
+function create(req, res) {
+  const reqBody = res.locals.reqBody;
+  const newOrder = {
+    ...reqBody,
+    id: nextId(),
+  };
+  orders.push(newOrder);
+  res.status(201).json({ data: newOrder });
+}
+
+function list(req, res) {
+  res.json({ data: orders });
 }
 
 module.exports = {
   create: [
-    deliverToExists,
-    mobileNumberExists,
-    dishesExists,
-    dishQuantityExists,
-    dishQuantityIsInteger,
+    bodyHasDeliverToProperty,
+    bodyHasMobileNumProperty,
+    bodyHasDishesProperty,
+    bodyHasDishQuantityProperty,
     create,
   ],
   read: [orderExists, read],
-  list,
-  update:[ orderExists,
-    deliverToExists,
-    mobileNumberExists,
-    dishesExists,
-    dishQuantityExists,
-    dishQuantityIsInteger,
-    statusExists,
+  update: [
+    orderExists,
+    bodyHasDeliverToProperty,
+    bodyHasMobileNumProperty,
+    bodyHasDishesProperty,
+    bodyHasDishQuantityProperty,
+    bodyIdMatchesRouteId,
+    bodyHasStatusProperty,
     update,
   ],
-  delete: [orderExists, statusPending, destroy],
+  delete: [orderExists, orderStatusIsPending, destroy],
+  list,
 };
