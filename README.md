@@ -2,9 +2,9 @@
 
 Project description: GrubDash
 
-I've been hired as a backend developer for a new startup called GrubDash! As another developer works on the design and frontend experience, you have been tasked with setting up an API and building out specific routes so that the frontend developers can demo some initial design ideas for the big bosses.
+"I've been hired as a backend developer for a new startup called GrubDash! As another developer works on the design and frontend experience, you have been tasked with setting up an API and building out specific routes so that the frontend developers can demo some initial design ideas for the big bosses.
 I set up a RESTful API, wrote custom validation functions, created route handlers, and built specific API endpoints. 
-Of note, the front-end application was provided for this assignment.
+Of note, the front-end application was provided for this assignment."
 
 ## Screenshot
 ### Home Page:
