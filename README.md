@@ -8,7 +8,7 @@ Of note, the front-end application was provided for this assignment."
 
 ## Screenshot
 ### Home Page:
-![image](https://user-images.githubusercontent.com/98557317/193170401-bfc06e3f-a4d8-4556-b64f-a31dee58d217.png)
+![image](https://user-images.githubusercontent.com/98557317/199596288-be0afff3-0bc9-42b5-8cd4-1f78eb8d494f.png)
 
 ## Technology
 - Built with Node.js and Express server framework
